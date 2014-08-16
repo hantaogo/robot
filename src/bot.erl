@@ -17,6 +17,7 @@ in() ->
 	in(Count, Times, Delay).
 
 out() ->
+	chater:stop(),
 	robot_master:clear().
 
 in(Count, 1, _) ->

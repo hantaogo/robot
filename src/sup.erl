@@ -23,8 +23,9 @@ init([]) ->
     SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
     
     SceneSup = {scene_sup, {scene_sup, start_link, []}, permanent, infinity, supervisor, [scene_sup]},
+    ChaterSup = {chater_sup, {chater_sup, start_link, []}, permanent, infinity, supervisor, [chater_sup]},
     RobotSup = {robot_sup, {robot_sup, start_link, []}, permanent, infinity, supervisor, [robot_sup]},
     RobotMaster = {robot_master, {robot_master, start_link, []}, permanent, 500, worker, [robot_master]},
 
-    Children = [SceneSup, RobotMaster, RobotSup],
+    Children = [SceneSup, ChaterSup, RobotMaster, RobotSup],
     {ok, {SupFlags, Children}}.

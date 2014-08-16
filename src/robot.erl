@@ -46,6 +46,8 @@
 -define (TIME_MOVE, 200).
 % -define (TIME_THINK, 10000).
 
+-define (CHANNEL_SCENE, 8).
+
 -record (data, {user, dc, game, is_dc_ready, is_game_ready, hero, scene, timer, name, role_id, session_id}).
 -record (hero, {type, show_id, camp_id, head_id, confraternity, offical_id, is_god_army, level, heading, move_speed, x, y, char_name, parameter_id, attack_mode}).
 -record (scene, {tid}).
@@ -55,8 +57,7 @@
 	not_ready/2,
 	not_entergame/2,
 	just_enter/2,
-	wait/2,
-	walking/2
+	wait/2
 	]).
 
 % ----------------------------------------------------------------------------
@@ -110,6 +111,10 @@ handle_info(think, Name, Data) ->
 	gen_fsm:send_event(self(), think),
 	{next_state, Name, Data};
 
+handle_info({chat, Bin}, Name, Data) ->
+	gen_fsm:send_event(self(), {chat, Bin}),
+	{next_state, Name, Data};
+
 handle_info(stop, _Name, Data) ->
 	{stop, normal, Data};
 
@@ -117,14 +122,15 @@ handle_info(Info, Name, #data{user=User}=Data) ->
 	io:format("~p handle_info ~p~n", [User, Info]),
 	{next_state, Name, Data}.
 
-terminate(Reason, Name, #data{user=User, game=Game, timer=Timer}) ->
+terminate(Reason, Name, #data{user=User, game=Game, timer=Timer, hero=Hero}) ->
 	io:format("~p terminate in state ~p reason: ~p~n", [User, Name, Reason]),
 	% 退出游戏
 	CMD_QUIT = 2,
 	Msg = <<CMD_QUIT>>,
 	connecter:call(Game, ?GAME_SERVICE_LOGIN, ?GAME_MSG_ID_QUIT, Msg),
 	% 取消计时器
-	timer:cancel(Timer).
+	timer:cancel(Timer),
+	chater:unregister(Hero#hero.char_name).
 
 code_change(_OldVsn, Name, Data, _Extra) ->
 	{ok, Name, Data}.
@@ -234,49 +240,52 @@ wait({move, X, Y}, #data{scene=Scene, hero=Hero}=Data) ->
 		error ->
 			io:format("fail to find path: ~p ~p,~p --> ~p~p~n", [Hero#hero.char_name, Hero#hero.x, Hero#hero.y, X, Y])
 	end,
-	{next_state, walking, Data};
+	{next_state, wait, Data};
 
-wait(think, #data{scene=Scene, hero=Hero, game=Game}=Data) ->
+wait(think, #data{scene=Scene, hero=Hero, game=_Game}=Data) ->
 	% io:format("~p think~n", [Hero#hero.char_name]),
 	% 随机移动
-	{ok, {X, Y}} = scene:random_walkable(Scene#scene.tid),
-	% io:format("~p ~p ~p,~p --> ~p,~p~n", [Scene#scene.tid, Hero#hero.char_name, Hero#hero.x, Hero#hero.y, X, Y]),
-	scene:path(Scene#scene.tid, {Hero#hero.x, Hero#hero.y}, {X, Y}),
-	case scene:path(Scene#scene.tid, {Hero#hero.x, Hero#hero.y}, {X, Y}) of
-		{ok, L} ->
-			% io:format("found path: ~p~n", [L]),
-			erlang:start_timer(?TIME_MOVE, self(), {move, L});
-		error ->
-			io:format("fail to find path: ~p ~p,~p --> ~p~p~n", [Hero#hero.char_name, Hero#hero.x, Hero#hero.y, X, Y])
+	case catch scene:random_walkable(Scene#scene.tid) of	
+		{ok, {X, Y}} ->
+			% io:format("~p ~p ~p,~p --> ~p,~p~n", [Scene#scene.tid, Hero#hero.char_name, Hero#hero.x, Hero#hero.y, X, Y]),
+			scene:path(Scene#scene.tid, {Hero#hero.x, Hero#hero.y}, {X, Y}),
+			case scene:path(Scene#scene.tid, {Hero#hero.x, Hero#hero.y}, {X, Y}) of
+				{ok, L} ->
+					% io:format("found path: ~p~n", [L]),
+					erlang:start_timer(?TIME_MOVE, self(), {move, L});
+				error ->
+					io:format("fail to find path: ~p ~p,~p --> ~p~p~n", [Hero#hero.char_name, Hero#hero.x, Hero#hero.y, X, Y])
+			end;
+		_Error ->
+			io:format("~p find path fail!~n", [Hero#hero.char_name])
 	end,
-	% 说话
-	Cannel = 8,
-	VipLevel = 0,
-	CharName = utils:utf(Hero#hero.char_name),
-	Content = utils:utf(make_word()),
-	Msg = <<Cannel, VipLevel, CharName/binary, Content/binary, 0>>,
-	connecter:cast(Game, ?GAME_SERVICE_CHAT, Msg),
-	{next_state, walking, Data};
+	{next_state, wait, Data};
 
-wait(_Event, Data) ->
-	% io:format("wait not process event: ~p~n", [Event]),
-	{next_state, wait, Data}.
+wait({recv, Game, <<_Len:32/integer, ?GAME_SERVICE_CHAT, ?CHANNEL_SCENE, _Vip, NameLen:16/integer, _Name:NameLen/binary, ContentLen:16/integer, Content:ContentLen/binary, _Other/binary>>}, #data{user=User, game=Game}=Data) ->
+	chater:response(User, binary_to_list(Content)),
+	{next_state, wait, Data};
 
-walking({timeout, _TimerRef, {move, [{X,Y}|RestPath]}}, #data{game=Game, scene=Scene, hero=Hero}=Data) ->
+wait({chat, Content}, #data{hero=Hero, game=Game}=Data) ->
+	% io:format("chat: ~p~n", [Content]),
+	say(Game, Hero#hero.char_name, Content),
+	{next_state, wait, Data};
+
+% 行走
+wait({timeout, _TimerRef, {move, [{X,Y}|RestPath]}}, #data{game=Game, scene=Scene, hero=Hero}=Data) ->
 	Tid = Scene#scene.tid,
 	Msg = <<4, Tid:32/integer, X:16/integer, Y:16/integer>>,
 	connecter:cast(Game, ?GAME_SERVICE_SCENE, Msg),
 	erlang:start_timer(?TIME_MOVE, self(), {move, RestPath}),
 	% io:format("move: ~p,~p~n", [X, Y]),
-	{next_state, walking, Data#data{hero=Hero#hero{x=X, y=Y}}};
+	{next_state, wait, Data#data{hero=Hero#hero{x=X, y=Y}}};
 
-walking({timeout, _TimerRef, {move, []}}, #data{hero=_Hero}=Data) ->
+wait({timeout, _TimerRef, {move, []}}, #data{hero=_Hero}=Data) ->
 	% io:format("[-> wait] ~p arrived ~p,~p~n", [Hero#hero.char_name, Hero#hero.x, Hero#hero.y]),
 	{next_state, wait, Data};
 
-walking(_Event, Data) ->
-	% io:format("walking not process event: ~p~n", [Event]),
-	{next_state, walking, Data}.
+wait(_Event, Data) ->
+	% io:format("wait not process event: ~p~n", [Event]),
+	{next_state, wait, Data}.
 
 % ----------------------------------------------------------------------------
 %                                  内部的
@@ -308,8 +317,10 @@ just_enter_check(#data{user=User, hero=Hero}=Data) ->
 			{ok, TimeThink} = application:get_env(bot, time_think),
 			{ok, Timer} = timer:send_interval(TimeThink, self(), think),
 			% 立即触发一次思考
-			self() ! think,
+			% self() ! think,
 			robot_master ! {success, User},
+			% 在聊天服务器里注册
+			chater:register(binary_to_list(Hero#hero.char_name), self()),
 			{next_state, wait, Data#data{timer=Timer}};
 		_ ->
 			{next_state, just_enter, Data}
@@ -330,12 +341,19 @@ bin_to_scene(Bin) ->
 make_name(User) ->
 	utils:utf(User).
 
-make_word() ->
-	L = ["冷姐最漂亮","世上只有冷姐好","新哥是傻逼","你才是傻逼","你才是大海","你全家都是大海","海你妹，我是你爹","草你妹","冷姐真可爱","冷姐真二"],
-	random_from_list(L).
+% make_word() ->
+% 	L = [],
+% 	random_from_list(L).
 
 random_from_list(L) ->
 	A = array:from_list(L),
 	I = random:uniform(array:size(A))-1,
 	array:get(I, A).
 	
+say(Game, CharName, Content) ->
+	Cannel = 8,
+	VipLevel = 0,
+	CharNameWithLen = utils:utf(CharName),
+	ContentWithLen = utils:utf(Content),
+	Msg = <<Cannel, VipLevel, CharNameWithLen/binary, ContentWithLen/binary, 0>>,
+	connecter:cast(Game, ?GAME_SERVICE_CHAT, Msg).
