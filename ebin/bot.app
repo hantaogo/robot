@@ -1,0 +1,20 @@
+{application, bot,
+  [{description, "robot for game lcj"},
+  {vsn, "1.0"},
+  {modules, [
+    app,
+    sup,
+    robot_master,
+    robot_sup,
+    robot,
+    scene_sup,
+    scene,
+    connecter,
+    codekit,
+    grid,
+    utils
+  ]},
+  {registered, [sup, robot_master, robot_sup, scene_sup, scene]},
+  {mod, {app, []}},
+  {env, [{join, {1,500,500}}, {scenepath, "scene"}, {dc, {"127.0.0.1", 7766}}, {game, {"127.0.0.1", 6766}}, {key, "XCWXCWXCWXXX"}, {name_pre, "ggtt"}, {time_think, 10000}]},
+  {applications, [kernel, stdlib]}]}.
