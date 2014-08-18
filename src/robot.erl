@@ -118,8 +118,8 @@ handle_info({chat, Bin}, Name, Data) ->
 handle_info(stop, _Name, Data) ->
 	{stop, normal, Data};
 
-handle_info(Info, Name, #data{user=User}=Data) ->
-	io:format("~p handle_info ~p~n", [User, Info]),
+handle_info(_Info, Name, #data{user=_User}=Data) ->
+	% io:format("~p handle_info ~p~n", [User, Info]),
 	{next_state, Name, Data}.
 
 terminate(Reason, Name, #data{user=User, game=Game, timer=Timer, hero=Hero}) ->

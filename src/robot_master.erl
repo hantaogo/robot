@@ -69,8 +69,12 @@ handle_call({add_many, UserList}, _From, #state{users=Users}=State) ->
 			{ok, _} ->
 				{Success, Fail ++ [User], Dict};
 			error ->
-				{ok, Pid} = robot_sup:start_robot(User),
-				{Success ++ [User], Fail, dict:store(User, Pid, Dict)}
+				case robot_sup:start_robot(User) of
+					{ok, Pid} ->
+						{Success ++ [User], Fail, dict:store(User, Pid, Dict)};
+					_Other ->
+						{Success, Fail ++ [User], Dict}
+				end
 		end
 	end,
 	{Success, Fail, Dict} = lists:foldl(F, {[],[],Users}, UserList),

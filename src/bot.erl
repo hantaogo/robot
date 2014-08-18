@@ -23,6 +23,7 @@ out() ->
 in(Count, 1, _) ->
 	in(Count);
 in(Count, Times, Delay) ->
+	% io:format("~p~n", [Times]),
 	in(Count),
 	timer:apply_after(Delay, ?MODULE, in, [Count, Times-1, Delay]).
 

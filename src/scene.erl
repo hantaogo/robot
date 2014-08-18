@@ -56,7 +56,7 @@ get_scene(Tid) ->
 
 -spec path(integer(), point(), point()) -> points().
 path(Tid, A, B) ->
-	gen_server:call(?MODULE, {path, Tid, A, B}).
+	gen_server:call(?MODULE, {path, Tid, A, B}, 30000).
 
 -spec random_walkable(integer()) -> point().
 random_walkable(Tid) ->
