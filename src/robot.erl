@@ -245,20 +245,29 @@ wait({move, X, Y}, #data{scene=Scene, hero=Hero}=Data) ->
 wait(think, #data{scene=Scene, hero=Hero, game=_Game}=Data) ->
 	% io:format("~p think~n", [Hero#hero.char_name]),
 	% 随机移动
-	case catch scene:random_walkable(Scene#scene.tid) of	
+	case catch scene:random_walkable(Scene#scene.tid) of
 		{ok, {X, Y}} ->
-			% io:format("~p ~p ~p,~p --> ~p,~p~n", [Scene#scene.tid, Hero#hero.char_name, Hero#hero.x, Hero#hero.y, X, Y]),
-			scene:path(Scene#scene.tid, {Hero#hero.x, Hero#hero.y}, {X, Y}),
-			case scene:path(Scene#scene.tid, {Hero#hero.x, Hero#hero.y}, {X, Y}) of
-				{ok, L} ->
-					% io:format("found path: ~p~n", [L]),
-					erlang:start_timer(?TIME_MOVE, self(), {move, L});
-				error ->
-					io:format("fail to find path: ~p ~p,~p --> ~p~p~n", [Hero#hero.char_name, Hero#hero.x, Hero#hero.y, X, Y])
+			X0 = Hero#hero.x,
+			Y0 = Hero#hero.y,
+			Dx = X0 - X,
+			Dy = Y0 - Y,
+			case Dx * Dx + Dy * Dy =< 400 of
+				true ->
+					% io:format("~p ~p ~p,~p --> ~p,~p~n", [Scene#scene.tid, Hero#hero.char_name, Hero#hero.x, Hero#hero.y, X, Y]),
+					case scene:path(Scene#scene.tid, {Hero#hero.x, Hero#hero.y}, {X, Y}) of
+						{ok, L} ->
+							% io:format("found path: ~p~n", [L]),
+							erlang:start_timer(?TIME_MOVE, self(), {move, L});
+						error ->
+							io:format("fail to find path: ~p ~p,~p --> ~p~p~n", [Hero#hero.char_name, Hero#hero.x, Hero#hero.y, X, Y])
+					end;
+				false ->
+					ok
 			end;
 		_Error ->
-			io:format("~p find path fail!~n", [Hero#hero.char_name])
+			io:format("~p find path fail with random_walkable!~n", [Hero#hero.char_name])
 	end,
+	% say(Game, Hero#hero.char_name, make_word()),
 	{next_state, wait, Data};
 
 wait({recv, Game, <<_Len:32/integer, ?GAME_SERVICE_CHAT, ?CHANNEL_SCENE, _Vip, NameLen:16/integer, _Name:NameLen/binary, ContentLen:16/integer, Content:ContentLen/binary, _Other/binary>>}, #data{user=User, game=Game}=Data) ->
@@ -342,7 +351,13 @@ make_name(User) ->
 	utils:utf(User).
 
 % make_word() ->
-% 	L = [],
+% 	L = [
+% 	"有这么一个规律：胸小的姑娘一般脾气都特大；胸大的姑娘一般脾气都特好。古语云：穷胸极恶，有容奶大。 ", 
+% 	"刚看到邻居大嫂在打孩子，我问:怎么了，干嘛打他？邻居大嫂:这孩子太过分了！不打不行！我：怎么过分了？大嫂：这倒霉孩子，要吃月饼！我：至于吗？孩子想吃块月饼，你就打他？大嫂：他非要吃韭菜鸡蛋的！该……打死才好涅… ", 
+% 	"看到一句话：在感情没到那份上的时候，你想爱人家好好爱就是了，爱就是嘘寒问暖，是犬马之诚，是投以木李，报之琼玖，匪报而永以为好也。什么欲擒故纵，什么声东击西，什么知我者谓我心忧，不知我者谓我何求。别学那些没用的，初级就只能做任务，被爱的人才有资格用技能。 ", 
+% 	"男人永远不懂女人的经痛,女人也永远不会了解男人的蛋疼. ",
+% 	"一个人吃饭的时候会感到孤单，但一个人吃零食的时候就不会。 "
+% 	],
 % 	random_from_list(L).
 
 random_from_list(L) ->
