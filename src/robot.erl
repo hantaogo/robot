@@ -8,7 +8,9 @@
 	start_link/1,
 	start/1,
 	stop/1,
-	move/3
+	move/3,
+	cast/3,
+	call/4
 	]).
 
 % gen_fsm 回调函数
@@ -21,11 +23,11 @@
 	code_change/4
 	]).
 
-% -define (DC_HOST, "127.0.0.1").
-% -define (DC_PORT, 7766).
-% -define (GAME_HOST, "127.0.0.1").
-% -define (GAME_PORT, 6766).
-% -define (KEY, "XCWXCWXCWXXX").
+-define (DC_IP, "127.0.0.1").
+-define (DC_PORT, 7766).
+-define (GAME_IP, "127.0.0.1").
+-define (GAME_PORT, 6766).
+-define (KEY, "XCWXCWXCWXXX").
 
 -define (DC_SERVICE_LOGIN, 2).
 -define (DC_SERVICE_HERO_UPDATE, 10).
@@ -44,7 +46,7 @@
 -define (TYPE_SCENE_HERO_SELF, 15).
 
 -define (TIME_MOVE, 200).
-% -define (TIME_THINK, 10000).
+-define (TIME_THINK, 30000).
 
 -define (CHANNEL_SCENE, 8).
 
@@ -75,13 +77,19 @@ stop(Pid) ->
 move(Ref, X, Y)->
 	gen_fsm:send_event(Ref, {move, X, Y}).
 
+cast(Ref, ServiceId, Msg)->
+	gen_fsm:send_event(Ref, {cast, ServiceId, Msg}).
+
+call(Ref, ServiceId, MsgId, Msg)->
+	gen_fsm:send_event(Ref, {call, ServiceId, MsgId, Msg}).
+
 % ----------------------------------------------------------------------------
 %                                  gen_fsm 回调函数
 % ----------------------------------------------------------------------------
 init([User]) ->
 	% io:format("new robot ~p~n", [User]),
-	{ok, {DcIp, DcPort}} = application:get_env(bot, dc),
-	{ok, {GameIp, GamePort}} = application:get_env(bot, game),
+	{DcIp, DcPort} = application:get_env(bot, dc, {?DC_IP, ?DC_PORT}),
+	{GameIp, GamePort} = application:get_env(bot, game, {?GAME_IP, ?GAME_PORT}),
 	{ok, DcPid} = connecter:start_link(self(), DcIp, DcPort),
 	{ok, GamePid} = connecter:start_link(self(), GameIp, GamePort),
 	% 重新设置随机种子
@@ -274,6 +282,10 @@ wait({recv, Game, <<_Len:32/integer, ?GAME_SERVICE_CHAT, ?CHANNEL_SCENE, _Vip, N
 	chater:response(User, binary_to_list(Content)),
 	{next_state, wait, Data};
 
+wait({recv, Game, <<Len:32/integer, Bin/binary>>}, #data{user=User, game=Game}=Data) ->
+	io:format("~p(wait) recv(~p): ~p~n", [User, Len, Bin]),
+	{next_state, wait, Data};
+
 wait({chat, Content}, #data{hero=Hero, game=Game}=Data) ->
 	% io:format("chat: ~p~n", [Content]),
 	say(Game, Hero#hero.char_name, Content),
@@ -292,6 +304,16 @@ wait({timeout, _TimerRef, {move, []}}, #data{hero=_Hero}=Data) ->
 	% io:format("[-> wait] ~p arrived ~p,~p~n", [Hero#hero.char_name, Hero#hero.x, Hero#hero.y]),
 	{next_state, wait, Data};
 
+wait({cast, ServiceId, Msg}, #data{game=Game}=Data) ->
+	io:format("cast: ~p ~p~n", [ServiceId, Msg]),
+	connecter:cast(Game, ServiceId, Msg),
+	{next_state, wait, Data};
+
+wait({call, ServiceId, MsgId, Msg}, #data{game=Game}=Data) ->
+	io:format("call: ~p ~p ~p~n", [ServiceId, MsgId, Msg]),
+	connecter:call(Game, ServiceId, MsgId, Msg),
+	{next_state, wait, Data};
+
 wait(_Event, Data) ->
 	% io:format("wait not process event: ~p~n", [Event]),
 	{next_state, wait, Data}.
@@ -308,7 +330,7 @@ not_ready_check(#data{user=User, dc=Dc}=Data) ->
 			Username = utils:utf(User++"&"),
 			Time = utils:seconds1970(),
 			Stime = utils:i2s(Time),
-			{ok, Key} = application:get_env(bot, key),
+			Key = application:get_env(bot, key, ?KEY),
 			Sign = utils:md5(User++Stime++Key),
 			Password = utils:utf("_1username=" ++ User ++ "&time=" ++ Stime ++ "&sign=" ++ Sign),
 			Msg = <<CMD_LOGIN, Username/binary, Password/binary>>,
@@ -323,7 +345,7 @@ just_enter_check(#data{user=User, hero=Hero}=Data) ->
 	case Data#data.hero /= undefined andalso Data#data.scene /= undefined of
 		true ->
 			io:format("  ~p join~n", [binary_to_list(Hero#hero.char_name)]),
-			{ok, TimeThink} = application:get_env(bot, time_think),
+			TimeThink = application:get_env(bot, time_think, ?TIME_THINK),
 			{ok, Timer} = timer:send_interval(TimeThink, self(), think),
 			% 立即触发一次思考
 			% self() ! think,

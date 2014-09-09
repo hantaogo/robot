@@ -60,7 +60,7 @@ path(Tid, A, B) ->
 
 -spec random_walkable(integer()) -> point().
 random_walkable(Tid) ->
-	gen_server:call(?MODULE, {random_walkable, Tid}).
+	gen_server:call(?MODULE, {random_walkable, Tid}, 30000).
 
 % ----------------------------------------------------------------------------
 %                             gen_server callbacks

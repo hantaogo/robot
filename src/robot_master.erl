@@ -60,7 +60,7 @@ handle_call({add, User}, _From, #state{users=Users}=State) ->
 			{reply, {error, already_exists}, State};
 		error ->
 			{ok, Pid} = robot_sup:start_robot(User),
-			{reply, ok, State#state{users=dict:store(User, Pid, Users)}}
+			{reply, {ok, Pid}, State#state{users=dict:store(User, Pid, Users)}}
 	end;
 
 handle_call({add_many, UserList}, _From, #state{users=Users}=State) ->

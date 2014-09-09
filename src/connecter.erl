@@ -56,7 +56,7 @@ call(Ref, ServiceId, MsgId, Msg) ->
 init([Pid, Host, Port]) ->
 	% io:format("new connecter: ~p,~p,~p,~p~n", [self(), Pid, Host, Port]),
 	case gen_tcp:connect(Host, Port, [binary, {packet, 0}, {active, true}]) of
-		{ok, Socket} ->			
+		{ok, Socket} ->
 			% send tell me codekey
 			m_cast(Socket, ?SERVICE_SENDKEY, <<>>),
 			{ok, #state{pid=Pid, socket=Socket, key=?DEFAULT_KEY}};
