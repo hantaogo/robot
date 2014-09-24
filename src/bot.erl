@@ -12,6 +12,13 @@
 	start/0,
 	stop/0
 	]).
+
+-export([
+	g/0,
+	s/2,
+	c/2
+	]).
+
 in() ->
 	{ok, {Count, Times, Delay}} = application:get_env(bot, join),
 	in(Count, Times, Delay).
@@ -50,4 +57,17 @@ start() ->
 stop() ->
 	out(),
 	application:stop(bot).
+
+g() ->
+	ok = bot:start(),
+	{ok, P} = robot_master:add("gm001"),
+	register(g, P).
+
+-spec s(integer(), binary()) -> term().
+s(ServiceId, Msg) ->
+	robot:cast(g, ServiceId, Msg).
+
+-spec c(integer(), binary()) -> term().
+c(ServiceId, Msg) ->
+	robot:call(g, ServiceId, 99, Msg).
 

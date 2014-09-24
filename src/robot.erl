@@ -158,7 +158,7 @@ not_ready(Event, Data) ->
 	{next_state, not_ready, Data}.
 
 not_entergame({recv, Dc, <<_Len:32/integer, 0, ?DC_MSG_ID_LOGIN:32/integer, 200:16/integer, 0, SessionIdLen:16/integer, SessionId:SessionIdLen/binary, _/binary>>}, #data{user=User, dc=Dc}=Data) ->
-	% io:format("~p not created role, session id: ~p~n", [User, SessionId]),
+	% io:format("~p not_entergame created role, session id: ~p~n", [User, SessionId]),
 	% 创建人物
 	CMD_CREATE_ROLE = 1,
 	Username = utils:utf(User++"&"),
@@ -282,8 +282,14 @@ wait({recv, Game, <<_Len:32/integer, ?GAME_SERVICE_CHAT, ?CHANNEL_SCENE, _Vip, N
 	chater:response(User, binary_to_list(Content)),
 	{next_state, wait, Data};
 
-wait({recv, Game, <<Len:32/integer, Bin/binary>>}, #data{user=User, game=Game}=Data) ->
-	io:format("~p(wait) recv(~p): ~p~n", [User, Len, Bin]),
+wait({recv, Game, <<Len:32/integer, ServiceId, CmdId, Bin/binary>>}, #data{user=User, game=Game}=Data) ->
+	FilterServices = application:get_env(bot, filter_services, []),
+	case lists:member(ServiceId, FilterServices) of
+		false ->
+			io:format("~p(wait) recv(~p): [~p:~p] ~p~n", [User, Len, ServiceId, CmdId, Bin]);
+		_ ->
+			ok
+	end,
 	{next_state, wait, Data};
 
 wait({chat, Content}, #data{hero=Hero, game=Game}=Data) ->
