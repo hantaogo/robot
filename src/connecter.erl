@@ -123,7 +123,7 @@ m_csend(Socket, Key, <<ServiceId, Bin/binary>>) ->
 	EncodeData = <<ServiceId, EncryptData/binary>>,
 	FinalData = codekit:encode(EncodeData),
 	% io:format("csend to sercive: ~p ~p~n", [ServiceId, Bin]), 
-	io:format("csend: ~p~n", [FinalData]),
+	% io:format("csend: ~p~n", [FinalData]),
 	gen_tcp:send(Socket, FinalData).
 
 m_cast(Socket, ServiceId, Msg) ->
