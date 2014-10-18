@@ -111,6 +111,10 @@ handle_info({recv, X, Bin}, Name, Data) ->
 	gen_fsm:send_event(self(), {recv, X, Bin}),
 	{next_state, Name, Data};
 
+handle_info({tcp_closed, X}, Name, Data) ->
+	io:format("~p's connecter ~p disconnected.~n", [Name, X]),
+	{stop, normal, Data};
+
 handle_info({timeout, TimerRef, What}, Name, Data) ->
 	gen_fsm:send_event(self(), {timeout, TimerRef, What}),
 	{next_state, Name, Data};
@@ -157,7 +161,7 @@ not_ready(Event, Data) ->
 	io:format("not_ready not process event: ~p~n", [Event]),
 	{next_state, not_ready, Data}.
 
-not_entergame({recv, Dc, <<_Len:32/integer, 0, ?DC_MSG_ID_LOGIN:32/integer, 200:16/integer, 0, SessionIdLen:16/integer, SessionId:SessionIdLen/binary, _/binary>>}, #data{user=User, dc=Dc}=Data) ->
+not_entergame({recv, Dc, <<0, ?DC_MSG_ID_LOGIN:32/integer, 200:16/integer, 0, SessionIdLen:16/integer, SessionId:SessionIdLen/binary, _/binary>>}, #data{user=User, dc=Dc}=Data) ->
 	% io:format("~p not_entergame created role, session id: ~p~n", [User, SessionId]),
 	% 创建人物
 	CMD_CREATE_ROLE = 1,
@@ -173,7 +177,7 @@ not_entergame({recv, Dc, <<_Len:32/integer, 0, ?DC_MSG_ID_LOGIN:32/integer, 200:
 	connecter:call(Dc, ?DC_SERVICE_HERO_UPDATE, ?DC_MSG_ID_CREATE_ROLE, Msg),
 	{next_state, not_entergame, Data#data{session_id=SessionId}};
 
-not_entergame({recv, Dc, <<_Len:32/integer, 0, ?DC_MSG_ID_CREATE_ROLE:32/integer, 200:16/integer, NameLen:16/integer, NameBin:NameLen/binary, RoleId:32/integer, _Sex, _Camp, _Grade, _Selected, _Race, _LiveState>>}, #data{user=User, dc=Dc, session_id=SessionId, game=Game}=Data) ->
+not_entergame({recv, Dc, <<0, ?DC_MSG_ID_CREATE_ROLE:32/integer, 200:16/integer, NameLen:16/integer, NameBin:NameLen/binary, RoleId:32/integer, _Sex, _Camp, _Grade, _Selected, _Race, _LiveState>>}, #data{user=User, dc=Dc, session_id=SessionId, game=Game}=Data) ->
 	% 创建人物成功，进入游戏
 	% io:format("role created: ~p ~p~n", [NameBin, RoleId]),
 	% io:format("enter game~n"),
@@ -186,7 +190,7 @@ not_entergame({recv, Dc, <<_Len:32/integer, 0, ?DC_MSG_ID_CREATE_ROLE:32/integer
 	connecter:call(Game, ?GAME_SERVICE_LOGIN, ?GAME_MSG_ID_LOGIN, Msg),
 	{next_state, not_entergame, Data#data{name=NameBin, role_id=RoleId}};
 
-not_entergame({recv, Dc, <<_Len:32/integer, 0, ?DC_MSG_ID_LOGIN:32/integer, 200:16/integer, _RoleCount, CharsData/binary>>}, #data{user=User, dc=Dc, game=Game}=Data) ->
+not_entergame({recv, Dc, <<0, ?DC_MSG_ID_LOGIN:32/integer, 200:16/integer, _RoleCount, CharsData/binary>>}, #data{user=User, dc=Dc, game=Game}=Data) ->
 	% io:format("~p char count ~p data: ~p~n", [User, RoleCount, CharsData]),
 	<<NameLen:16/integer, NameBin:NameLen/binary, RoleId:32/integer, _Sex, _Camp, _Grade, _Selected, _Race, _LiveState, SessionIdLen:16/integer, SessionId:SessionIdLen/binary, _/binary>> = CharsData,
 	% io:format("dc login ok -> name: ~p, roleId: ~p, sessionId: ~p~n", [NameBin, RoleId, SessionId]),
@@ -198,7 +202,7 @@ not_entergame({recv, Dc, <<_Len:32/integer, 0, ?DC_MSG_ID_LOGIN:32/integer, 200:
 	connecter:call(Game, ?GAME_SERVICE_LOGIN, ?GAME_MSG_ID_LOGIN, Msg),
 	{next_state, not_entergame, Data#data{name=NameBin, role_id=RoleId, session_id=SessionId}};
 
-not_entergame({recv, Game, <<_Len:32/integer, 0, ?GAME_MSG_ID_LOGIN:32/integer, 200:16/integer, _Other/binary>>}, #data{game=Game, user=_User}=Data) ->
+not_entergame({recv, Game, <<0, ?GAME_MSG_ID_LOGIN:32/integer, 200:16/integer, _Other/binary>>}, #data{game=Game, user=_User}=Data) ->
 	% io:format("~p login game ok, start join in world!~n", [User]),
 	CMD_LOGIN = 21,
 	Msg = <<CMD_LOGIN>>,
@@ -218,18 +222,18 @@ not_entergame(Event, #data{user=User}=Data) ->
 	io:format("~p not_entergame not process event: ~p~n", [User, Event]),
 	{next_state, not_entergame, Data}.
 
-just_enter({recv, Game, <<_Len:32/integer, ?GAME_SERVICE_SCENE, ?TYPE_SCENE_ALL_INFO, Bin/binary>>}, #data{user=_User, game=Game}=Data) ->
+just_enter({recv, Game, <<?GAME_SERVICE_SCENE, ?TYPE_SCENE_ALL_INFO, Bin/binary>>}, #data{user=_User, game=Game}=Data) ->
 	% io:format("recv scene info: ~p~n", [Bin]),
 	% io:format("~p recv scene info 1~n", [User]),
 	{ok, Scene} = bin_to_scene(Bin),
 	just_enter_check(Data#data{scene=Scene});
 
-just_enter({recv, Game, <<_Len:32/integer, ?GAME_SERVICE_SCENE, ?TYPE_SCENE_OBJECT_INFO, Tid:32/integer, _Bin/binary>>}, #data{user=_User, game=Game}=Data) ->
+just_enter({recv, Game, <<?GAME_SERVICE_SCENE, ?TYPE_SCENE_OBJECT_INFO, Tid:32/integer, _Bin/binary>>}, #data{user=_User, game=Game}=Data) ->
 	% io:format("recv scene info: ~p~n", [Bin]),
 	% io:format("~p recv scene info 2~n", [User]),
 	just_enter_check(Data#data{scene=#scene{tid=Tid}});
 
-just_enter({recv, Game, <<_Len:32/integer, ?GAME_SERVICE_SCENE, ?TYPE_SCENE_HERO_SELF, Bin/binary>>}, #data{user=_User, game=Game}=Data) ->
+just_enter({recv, Game, <<?GAME_SERVICE_SCENE, ?TYPE_SCENE_HERO_SELF, Bin/binary>>}, #data{user=_User, game=Game}=Data) ->
 	% io:format("recv hero info: ~p~n", [Bin]),
 	% io:format("~p recv hero info~n", [User]),
 	{ok, Hero} = bin_to_hero(Bin),
@@ -278,15 +282,15 @@ wait(think, #data{scene=Scene, hero=Hero, game=_Game}=Data) ->
 	% say(Game, Hero#hero.char_name, make_word()),
 	{next_state, wait, Data};
 
-wait({recv, Game, <<_Len:32/integer, ?GAME_SERVICE_CHAT, ?CHANNEL_SCENE, _Vip, NameLen:16/integer, _Name:NameLen/binary, ContentLen:16/integer, Content:ContentLen/binary, _Other/binary>>}, #data{user=User, game=Game}=Data) ->
+wait({recv, Game, <<?GAME_SERVICE_CHAT, ?CHANNEL_SCENE, _Vip, NameLen:16/integer, _Name:NameLen/binary, ContentLen:16/integer, Content:ContentLen/binary, _Other/binary>>}, #data{user=User, game=Game}=Data) ->
 	chater:response(User, binary_to_list(Content)),
 	{next_state, wait, Data};
 
-wait({recv, Game, <<Len:32/integer, ServiceId, CmdId, Bin/binary>>}, #data{user=User, game=Game}=Data) ->
+wait({recv, Game, <<ServiceId, CmdId, Bin/binary>>}, #data{user=User, game=Game}=Data) ->
 	FilterServices = application:get_env(bot, filter_services, []),
 	case lists:member(ServiceId, FilterServices) of
 		false ->
-			io:format("~p(wait) recv(~p): [~p:~p] ~p~n", [User, Len, ServiceId, CmdId, Bin]);
+			io:format("~p(wait) recv: [~p:~p] ~p~n", [User, ServiceId, CmdId, Bin]);
 		_ ->
 			ok
 	end,

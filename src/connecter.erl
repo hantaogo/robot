@@ -58,7 +58,7 @@ init([Pid, Host, Port]) ->
 	case gen_tcp:connect(Host, Port, [binary, {packet, 0}, {active, true}]) of
 		{ok, Socket} ->
 			% send tell me codekey
-			m_cast(Socket, ?SERVICE_SENDKEY, <<>>),
+			m_ccast(Socket, ?DEFAULT_KEY, ?SERVICE_SENDKEY, <<>>),
 			{ok, #state{pid=Pid, socket=Socket, key=?DEFAULT_KEY}};
 		{error, Reason} ->
 			{stop, Reason}
@@ -78,21 +78,21 @@ handle_cast({ccall, ServiceId, MsgId, Msg}, #state{socket=Socket, key=Key} = Sta
 handle_cast(_Request, State) ->
 	{noreply, State}.
 
-handle_info({tcp, _Socket, <<_Len:32/integer, 3, _StrLen:16/integer, CodeKey/binary>>}, #state{pid=Pid, key=Key}=State) ->
-	% io:format("key: ~p~n", [Key]),
-	NewKey = codekit:coding(binary_to_list(CodeKey), Key),
-	Pid ! {ready, self()},
-	% io:format("update key: ~p~n", [NewKey]),
-	erlang:start_timer(0, self(), ping),
-	{noreply, State#state{key=NewKey}};
+handle_info({tcp, _Socket, Data}, State) ->
+	% io:format("recv ~p~n", [Data]),
+	% case codekit:decode(Data) of
+	% 	error ->
+	% 		io:format("decode fail: ~p~n", [Data]),
+	% 		{noreply, State};
+	% 	{ok, Bin} ->
+	% 		% io:format("receive data: ~p~n", [Bin]),
+	% 		handle_info_tcp(Bin, State)
+	% end;
+	<<_Len:32/integer, Bin/binary>> = Data,
+	handle_info_tcp(Bin, State);
 
-handle_info({tcp, _Socket, <<7:32/integer,0,_:32/integer,200:16/integer>>}, State) ->
-	% io:format("receive ping~n", []),
-	{noreply, State};
-
-handle_info({tcp, _Socket, <<Data/binary>>}, #state{pid=Pid}=State) ->
-	% io:format("receive: ~p~n", [Data]),
-	Pid ! {recv, self(), Data},
+handle_info({tcp_closed, _Socket}, #state{pid=Pid}=State) ->
+	Pid ! {tcp_closed, self()},
 	{noreply, State};
 
 handle_info({timeout, _TimerRef, ping}, #state{socket=Socket, key=Key} = State) ->
@@ -115,32 +115,46 @@ code_change(_OldVsn, State, _Extra) ->
 %                                 internal
 % ----------------------------------------------------------------------------
 m_send(Socket, Bin) ->
-	% io:format("send : ~p~n", [Bin]),
-	gen_tcp:send(Socket, Bin).
+	Len = size(Bin),
+	gen_tcp:send(Socket, <<Len:32/integer, Bin/binary>>).
 
-m_csend(Socket, Key, <<Len:32/integer, ServiceId, Bin/binary>>) ->
-	CodeData = list_to_binary(codekit:coding(binary_to_list(Bin), Key)),
-	FinalData = <<Len:32/integer, ServiceId, CodeData/binary>>,
-	% io:format("csend old: ~p~n", [Bin]), 
-	% io:format("csend: ~p~n", [FinalData]),
+m_csend(Socket, Key, <<ServiceId, Bin/binary>>) ->
+	EncryptData = list_to_binary(codekit:coding(binary_to_list(Bin), Key)),
+	EncodeData = <<ServiceId, EncryptData/binary>>,
+	FinalData = codekit:encode(EncodeData),
+	% io:format("csend to sercive: ~p ~p~n", [ServiceId, Bin]), 
+	io:format("csend: ~p~n", [FinalData]),
 	gen_tcp:send(Socket, FinalData).
 
 m_cast(Socket, ServiceId, Msg) ->
 	Data = <<ServiceId, Msg/binary>>,
-	Len = size(Data),
-	m_send(Socket, <<Len:32/integer, Data/binary>>).
+	m_send(Socket, <<Data/binary>>).
 
 m_call(Socket, ServiceId, MsgId, Msg) ->
 	Data = <<ServiceId, MsgId:32/integer, Msg/binary>>,
-	Len = size(Data),
-	m_send(Socket, <<Len:32/integer, Data/binary>>).
+	m_send(Socket, <<Data/binary>>).
 
 m_ccast(Socket, Key, ServiceId, Msg) ->
 	Data = <<ServiceId, Msg/binary>>,
-	Len = size(Data),
-	m_csend(Socket, Key, <<Len:32/integer, Data/binary>>).
+	m_csend(Socket, Key, <<Data/binary>>).
 
 m_ccall(Socket, Key, ServiceId, MsgId, Msg) ->
 	Data = <<ServiceId, MsgId:32/integer, Msg/binary>>,
-	Len = size(Data),
-	m_csend(Socket, Key, <<Len:32/integer, Data/binary>>).
+	m_csend(Socket, Key, <<Data/binary>>).
+
+
+handle_info_tcp(<<3, _StrLen:16/integer, CodeKey/binary>>, #state{pid=Pid, key=Key}=State) ->
+	% io:format("key: ~p~n", [Key]),
+	NewKey = codekit:coding(binary_to_list(CodeKey), Key),
+	Pid ! {ready, self()},
+	% io:format("update key: ~p~n", [NewKey]),
+	erlang:start_timer(0, self(), ping),
+	{noreply, State#state{key=NewKey}};
+
+% 屏蔽Ping消息
+handle_info_tcp(<<0, _:32/integer,200:16/integer>>, State) ->
+	{noreply, State};
+
+handle_info_tcp(<<Data/binary>>, #state{pid=Pid}=State) ->
+	Pid ! {recv, self(), Data},
+	{noreply, State}.
