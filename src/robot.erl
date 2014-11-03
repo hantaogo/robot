@@ -190,6 +190,22 @@ not_entergame({recv, Dc, <<0, ?DC_MSG_ID_CREATE_ROLE:32/integer, 200:16/integer,
 	connecter:call(Game, ?GAME_SERVICE_LOGIN, ?GAME_MSG_ID_LOGIN, Msg),
 	{next_state, not_entergame, Data#data{name=NameBin, role_id=RoleId}};
 
+not_entergame({recv, Dc, <<0, ?DC_MSG_ID_CREATE_ROLE:32/integer, _FailCode:16/integer>>}, #data{user=User, dc=Dc, session_id=SessionId}=Data) ->
+	% 创建人物失败，重新创建
+	% 创建人物
+	CMD_CREATE_ROLE = 1,
+	Username = utils:utf(User++"&"),
+	Sid = utils:utf(SessionId),
+	Name = make_name(User),
+	Camp = 1,
+	L = [{1,1,1},{1,0,2},{2,1,3},{2,0,4},{3,1,5},{3,0,6},{4,1,7},{4,0,8}],
+	{Occupation, Sex, Head} = utils:random_from_list(L),
+	Msg = <<CMD_CREATE_ROLE, Username/binary, Sid/binary, Name/binary, Camp, Occupation, Sex, Head>>,
+	
+	io:format("repeat create role ~ts~n", [Name]),
+	connecter:call(Dc, ?DC_SERVICE_HERO_UPDATE, ?DC_MSG_ID_CREATE_ROLE, Msg),
+	{next_state, not_entergame, Data};
+
 not_entergame({recv, Dc, <<0, ?DC_MSG_ID_LOGIN:32/integer, 200:16/integer, _RoleCount, CharsData/binary>>}, #data{user=User, dc=Dc, game=Game}=Data) ->
 	% io:format("~p char count ~p data: ~p~n", [User, RoleCount, CharsData]),
 	<<NameLen:16/integer, NameBin:NameLen/binary, RoleId:32/integer, _Sex, _Camp, _Grade, _Selected, _Race, _LiveState, SessionIdLen:16/integer, SessionId:SessionIdLen/binary, _/binary>> = CharsData,
@@ -355,7 +371,7 @@ not_ready_check(#data{user=User, dc=Dc}=Data) ->
 just_enter_check(#data{user=User, hero=Hero}=Data) ->
 	case Data#data.hero /= undefined andalso Data#data.scene /= undefined of
 		true ->
-			io:format("  ~p join~n", [binary_to_list(Hero#hero.char_name)]),
+			io:format("~ts join~n", [unicode:characters_to_list(Hero#hero.char_name, utf8)]),
 			TimeThink = application:get_env(bot, time_think, ?TIME_THINK),
 			{ok, Timer} = timer:send_interval(TimeThink, self(), think),
 			% 立即触发一次思考
@@ -380,9 +396,14 @@ bin_to_scene(<<Tid:32/integer, _/binary>>) ->
 bin_to_scene(Bin) ->
 	{error, {invalid_data, Bin}}.
 
-make_name(_User) ->
-	{ok, Name} = robot_master:random_name(utils:random_from_list([boy, gril])),
-	Name.
+make_name(User) ->
+	case application:get_env(bot, chinese, true) of
+		true ->
+			{ok, Name} = robot_master:random_name(utils:random_from_list([boy, gril])),
+			Name;
+		false ->
+			utils:utf(User)
+	end.
 
 % make_word() ->
 % 	L = [
