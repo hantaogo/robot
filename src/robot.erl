@@ -170,7 +170,7 @@ not_entergame({recv, Dc, <<0, ?DC_MSG_ID_LOGIN:32/integer, 200:16/integer, 0, Se
 	Name = make_name(User),
 	Camp = 1,
 	L = [{1,1,1},{1,0,2},{2,1,3},{2,0,4},{3,1,5},{3,0,6},{4,1,7},{4,0,8}],
-	{Occupation, Sex, Head} = random_from_list(L),
+	{Occupation, Sex, Head} = utils:random_from_list(L),
 	Msg = <<CMD_CREATE_ROLE, Username/binary, Sid/binary, Name/binary, Camp, Occupation, Sex, Head>>,
 	
 	% io:format("create role ~p~n", [User]),
@@ -288,8 +288,9 @@ wait({recv, Game, <<?GAME_SERVICE_CHAT, ?CHANNEL_SCENE, _Vip, NameLen:16/integer
 
 wait({recv, Game, <<ServiceId, CmdId, Bin/binary>>}, #data{user=User, game=Game}=Data) ->
 	FilterServices = application:get_env(bot, filter_services, []),
-	case lists:member(ServiceId, FilterServices) of
-		false ->
+	PassServices = application:get_env(bot, pass_services, all),
+	case not lists:member(ServiceId, FilterServices) andalso (PassServices == all orelse lists:member(ServiceId, PassServices)) of
+		true ->
 			io:format("~p(wait) recv: [~p:~p] ~p~n", [User, ServiceId, CmdId, Bin]);
 		_ ->
 			ok
@@ -379,8 +380,9 @@ bin_to_scene(<<Tid:32/integer, _/binary>>) ->
 bin_to_scene(Bin) ->
 	{error, {invalid_data, Bin}}.
 
-make_name(User) ->
-	utils:utf(User).
+make_name(_User) ->
+	{ok, Name} = robot_master:random_name(utils:random_from_list([boy, gril])),
+	Name.
 
 % make_word() ->
 % 	L = [
@@ -390,12 +392,7 @@ make_name(User) ->
 % 	"男人永远不懂女人的经痛,女人也永远不会了解男人的蛋疼. ",
 % 	"一个人吃饭的时候会感到孤单，但一个人吃零食的时候就不会。 "
 % 	],
-% 	random_from_list(L).
-
-random_from_list(L) ->
-	A = array:from_list(L),
-	I = random:uniform(array:size(A))-1,
-	array:get(I, A).
+% 	utils:random_from_list(L).
 	
 say(Game, CharName, Content) ->
 	Cannel = 8,

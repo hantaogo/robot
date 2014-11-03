@@ -47,7 +47,7 @@ in(Count) ->
 	{ok, {length(Success), length(Fail)}}. 
 	
 go() ->
-	Result = application:start(bot),
+	Result = start(),
 	in(),
 	Result.
 
@@ -70,4 +70,3 @@ s(ServiceId, Msg) ->
 -spec c(integer(), binary()) -> term().
 c(ServiceId, Msg) ->
 	robot:call(g, ServiceId, 99, Msg).
-

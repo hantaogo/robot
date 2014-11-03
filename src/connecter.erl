@@ -78,7 +78,7 @@ handle_cast({ccall, ServiceId, MsgId, Msg}, #state{socket=Socket, key=Key} = Sta
 handle_cast(_Request, State) ->
 	{noreply, State}.
 
-handle_info({tcp, _Socket, Data}, State) ->
+handle_info({tcp, _Socket, <<_Len:32/integer, Bin/binary>>}, State) ->
 	% io:format("recv ~p~n", [Data]),
 	% case codekit:decode(Data) of
 	% 	error ->
@@ -88,8 +88,11 @@ handle_info({tcp, _Socket, Data}, State) ->
 	% 		% io:format("receive data: ~p~n", [Bin]),
 	% 		handle_info_tcp(Bin, State)
 	% end;
-	<<_Len:32/integer, Bin/binary>> = Data,
 	handle_info_tcp(Bin, State);
+
+handle_info({tcp, _Socket, Data}, State) ->
+	io:format("recv fault message: ~p~n", [Data]),
+	{noreply, State};
 
 handle_info({tcp_closed, _Socket}, #state{pid=Pid}=State) ->
 	Pid ! {tcp_closed, self()},

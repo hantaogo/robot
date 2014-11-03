@@ -7,6 +7,7 @@
 	i2s/1,
 	hashcode/1,
 	int32/1,
+	random_from_list/1,
 	test/0
 	]).
 
@@ -67,6 +68,11 @@ hashcode(S) ->
 			int32(X)
 		end,
 	lists:foldl(F, 0, S).
+
+random_from_list(L) ->
+	A = array:from_list(L),
+	I = random:uniform(array:size(A))-1,
+	array:get(I, A).
 
 test() ->
 	% User = "gm001",
