@@ -3,9 +3,11 @@
 
 -export ([
 	start_link/3,
-	start/0,
+	start/2,
 	cast/3,
-	call/4
+	call/4,
+	ncast/3,
+	ncall/4
 	]).
 
 % implement gen_server
@@ -41,14 +43,20 @@
 start_link(Pid, Host, Port) ->
 	gen_server:start_link(?MODULE, [Pid, Host, Port], []).
 
-start() ->
-	gen_server:start(?MODULE, [self(), "127.0.0.1", 7766], []).
+start(Host, Port) ->
+	gen_server:start(?MODULE, [undefined, Host, Port], []).
 
 cast(Ref, ServiceId, Msg) ->
 	gen_server:cast(Ref, {ccast, ServiceId, Msg}).
 
 call(Ref, ServiceId, MsgId, Msg) ->
 	gen_server:cast(Ref, {ccall, ServiceId, MsgId, Msg}).
+
+ncast(Ref, ServiceId, Msg) ->
+	gen_server:cast(Ref, {ncast, ServiceId, Msg}).
+
+ncall(Ref, ServiceId, MsgId, Msg) ->
+	gen_server:cast(Ref, {ncall, ServiceId, MsgId, Msg}).
 
 % ----------------------------------------------------------------------------
 %                            implement gen_server
@@ -73,6 +81,14 @@ handle_cast({ccast, ServiceId, Msg}, #state{socket=Socket, key=Key} = State) ->
 
 handle_cast({ccall, ServiceId, MsgId, Msg}, #state{socket=Socket, key=Key} = State) ->
 	m_ccall(Socket, Key, ServiceId, MsgId, Msg),
+	{noreply, State};
+
+handle_cast({ncast, ServiceId, Msg}, #state{socket=Socket} = State) ->
+	m_cast(Socket, ServiceId, Msg),
+	{noreply, State};
+
+handle_cast({ncall, ServiceId, MsgId, Msg}, #state{socket=Socket} = State) ->
+	m_call(Socket, ServiceId, MsgId, Msg),
 	{noreply, State};
 
 handle_cast(_Request, State) ->
@@ -156,6 +172,10 @@ handle_info_tcp(<<3, _StrLen:16/integer, CodeKey/binary>>, #state{pid=Pid, key=K
 
 % 屏蔽Ping消息
 handle_info_tcp(<<0, _:32/integer,200:16/integer>>, State) ->
+	{noreply, State};
+
+handle_info_tcp(<<Data/binary>>, #state{pid=undefined}=State) ->
+	io:format("recv message: ~p~n", [Data]),
 	{noreply, State};
 
 handle_info_tcp(<<Data/binary>>, #state{pid=Pid}=State) ->

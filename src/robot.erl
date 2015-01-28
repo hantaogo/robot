@@ -10,7 +10,9 @@
 	stop/1,
 	move/3,
 	cast/3,
-	call/4
+	call/4,
+	castdc/3,
+	calldc/4
 	]).
 
 % gen_fsm 回调函数
@@ -82,6 +84,12 @@ cast(Ref, ServiceId, Msg)->
 
 call(Ref, ServiceId, MsgId, Msg)->
 	gen_fsm:send_event(Ref, {call, ServiceId, MsgId, Msg}).
+
+castdc(Ref, ServiceId, Msg)->
+	gen_fsm:send_event(Ref, {castdc, ServiceId, Msg}).
+
+calldc(Ref, ServiceId, MsgId, Msg)->
+	gen_fsm:send_event(Ref, {calldc, ServiceId, MsgId, Msg}).
 
 % ----------------------------------------------------------------------------
 %                                  gen_fsm 回调函数
@@ -238,15 +246,16 @@ not_entergame(Event, #data{user=User}=Data) ->
 	io:format("~p not_entergame not process event: ~p~n", [User, Event]),
 	{next_state, not_entergame, Data}.
 
-just_enter({recv, Game, <<?GAME_SERVICE_SCENE, ?TYPE_SCENE_ALL_INFO, Bin/binary>>}, #data{user=_User, game=Game}=Data) ->
-	% io:format("recv scene info: ~p~n", [Bin]),
+just_enter({recv, Game, <<?GAME_SERVICE_SCENE, ?TYPE_SCENE_ALL_INFO, _Bin/binary>>}, #data{user=_User, game=Game}=Data) ->
+	% io:format("recv all scene info: ~p~n", [Bin]),
 	% io:format("~p recv scene info 1~n", [User]),
-	{ok, Scene} = bin_to_scene(Bin),
-	just_enter_check(Data#data{scene=Scene});
+	Tid = utils:hashcode("danYangCheng"),
+	just_enter_check(Data#data{scene=#scene{tid=Tid}});
 
-just_enter({recv, Game, <<?GAME_SERVICE_SCENE, ?TYPE_SCENE_OBJECT_INFO, Tid:32/integer, _Bin/binary>>}, #data{user=_User, game=Game}=Data) ->
-	% io:format("recv scene info: ~p~n", [Bin]),
+just_enter({recv, Game, <<?GAME_SERVICE_SCENE, ?TYPE_SCENE_OBJECT_INFO, _Bin/binary>>}, #data{user=_User, game=Game}=Data) ->
+	% io:format("recv scene info: ~p~n", [Tid]),
 	% io:format("~p recv scene info 2~n", [User]),
+	Tid = utils:hashcode("danYangCheng"),
 	just_enter_check(Data#data{scene=#scene{tid=Tid}});
 
 just_enter({recv, Game, <<?GAME_SERVICE_SCENE, ?TYPE_SCENE_HERO_SELF, Bin/binary>>}, #data{user=_User, game=Game}=Data) ->
@@ -341,6 +350,16 @@ wait({call, ServiceId, MsgId, Msg}, #data{game=Game}=Data) ->
 	connecter:call(Game, ServiceId, MsgId, Msg),
 	{next_state, wait, Data};
 
+wait({castdc, ServiceId, Msg}, #data{dc=Dc}=Data) ->
+	io:format("cast dc: ~p ~p~n", [ServiceId, Msg]),
+	connecter:cast(Dc, ServiceId, Msg),
+	{next_state, wait, Data};
+
+wait({calldc, ServiceId, MsgId, Msg}, #data{dc=Dc}=Data) ->
+	io:format("call dc: ~p ~p ~p~n", [ServiceId, MsgId, Msg]),
+	connecter:call(Dc, ServiceId, MsgId, Msg),
+	{next_state, wait, Data};
+
 wait(_Event, Data) ->
 	% io:format("wait not process event: ~p~n", [Event]),
 	{next_state, wait, Data}.
@@ -375,7 +394,7 @@ just_enter_check(#data{user=User, hero=Hero}=Data) ->
 			TimeThink = application:get_env(bot, time_think, ?TIME_THINK),
 			{ok, Timer} = timer:send_interval(TimeThink, self(), think),
 			% 立即触发一次思考
-			% self() ! think,
+			self() ! think,
 			robot_master ! {success, User},
 			% 在聊天服务器里注册
 			chater:register(binary_to_list(Hero#hero.char_name), self()),

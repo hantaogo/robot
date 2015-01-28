@@ -16,7 +16,12 @@
 -export([
 	g/0,
 	s/2,
-	c/2
+	c/2,
+	ds/2,
+	dc/2,
+	p/0,
+	ps/2,
+	pc/2
 	]).
 
 in() ->
@@ -60,7 +65,7 @@ stop() ->
 
 g() ->
 	ok = bot:start(),
-	{ok, P} = robot_master:add("gm001"),
+	{ok, P} = robot_master:add("gm1"),
 	register(g, P).
 
 -spec s(integer(), binary()) -> term().
@@ -70,3 +75,21 @@ s(ServiceId, Msg) ->
 -spec c(integer(), binary()) -> term().
 c(ServiceId, Msg) ->
 	robot:call(g, ServiceId, 99, Msg).
+
+-spec ds(integer(), binary()) -> term().
+ds(ServiceId, Msg) ->
+	robot:castdc(g, ServiceId, Msg).
+
+-spec dc(integer(), binary()) -> term().
+dc(ServiceId, Msg) ->
+	robot:calldc(g, ServiceId, 99, Msg).
+
+p() ->
+	{ok, P} = connecter:start("127.0.0.1", 17766),
+	register(p, P).
+
+ps(ServiceId, Msg) ->
+	connecter:ncast(p, ServiceId, Msg).
+
+pc(ServiceId, Msg) ->
+	connecter:ncast(p, ServiceId, 99, Msg).

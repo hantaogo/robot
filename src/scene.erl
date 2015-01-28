@@ -161,6 +161,6 @@ load_map(Filename) ->
 	{ok, Data} = file:read_file(Filename),
 	Tid = utils:hashcode(StringId),
 	Grid = grid:make(Data),
-	% {W,H} = grid:size(Grid),
-	% io:format("~p ~p (~px~p)~n", [Tid, StringId, W, H]),
+	{W,H} = grid:size(Grid),
+	io:format("~p ~p (~px~p)~n", [Tid, StringId, W, H]),
 	#scene{tid=Tid, string_id=StringId, filename=Basename, grid=Grid}.
