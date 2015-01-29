@@ -288,7 +288,7 @@ wait(think, #data{scene=Scene, hero=Hero, game=_Game}=Data) ->
 			Y0 = Hero#hero.y,
 			Dx = X0 - X,
 			Dy = Y0 - Y,
-			case Dx * Dx + Dy * Dy =< 400 of
+			case Dx * Dx + Dy * Dy =< 1000 of
 				true ->
 					% io:format("~p ~p ~p,~p --> ~p,~p~n", [Scene#scene.tid, Hero#hero.char_name, Hero#hero.x, Hero#hero.y, X, Y]),
 					case scene:path(Scene#scene.tid, {Hero#hero.x, Hero#hero.y}, {X, Y}) of
@@ -373,12 +373,13 @@ not_ready_check(#data{user=User, dc=Dc}=Data) ->
 	case Data#data.is_dc_ready andalso Data#data.is_game_ready of
 		true ->
 			CMD_LOGIN = 1,
+			ServerId = application:get_env(bot, serverid, 1),
 			Username = utils:utf(User++"&"),
 			Time = utils:seconds1970(),
 			Stime = utils:i2s(Time),
 			Key = application:get_env(bot, key, ?KEY),
-			Sign = utils:md5(User++Stime++Key),
-			Password = utils:utf("_1username=" ++ User ++ "&time=" ++ Stime ++ "&sign=" ++ Sign),
+			Sign = utils:md5(ServerId++User++Stime++Key),
+			Password = utils:utf("_1serverid=" ++ ServerId ++ "&username=" ++ User ++ "&time=" ++ Stime ++ "&sign=" ++ Sign),
 			Msg = <<CMD_LOGIN, Username/binary, Password/binary>>,
 			connecter:call(Dc, ?DC_SERVICE_LOGIN, ?DC_MSG_ID_LOGIN, Msg),
 			{next_state, not_entergame, Data};
