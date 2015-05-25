@@ -65,7 +65,7 @@ stop() ->
 
 g() ->
 	ok = bot:start(),
-	{ok, P} = robot_master:add("gm1"),
+	{ok, P} = robot_master:add("0001"),
 	register(g, P).
 
 -spec s(integer(), binary()) -> term().

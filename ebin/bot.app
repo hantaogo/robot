@@ -16,5 +16,5 @@
   ]},
   {registered, [sup, robot_master, robot_sup, scene_sup, scene]},
   {mod, {app, []}},
-  {env, [{join, {10,400,1000}}, {scenepath, "scene"}, {serverid, "1"}, {dc, {"61.138.29.121", 7766}}, {game, {"61.138.29.121", 6766}}, {chat, {"127.0.0.1", 1874}}, {key, "XCWXCWXCWXXX"}, {name_pre, "robot_"}, {chinese, true}, {time_think, 1000000000}, {filter_services, [12, 13, 20, 29]}, {pass_services, []}]},
+  {env, [{join, {100,10,1000}}, {scenepath, "scene"}, {serverid, "1"}, {dc, {"192.168.1.2", 7766}}, {game, {"192.168.1.2", 6766}}, {chat, {"127.0.0.1", 1874}}, {key, "XCWXCWXCWXXX"}, {name_pre, "e1_"}, {chinese, false}, {time_think, 30000}, {filter_services, [12, 13, 20, 29]}, {pass_services, []}]},
   {applications, [kernel, stdlib]}]}.

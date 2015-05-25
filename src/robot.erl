@@ -149,8 +149,8 @@ terminate(Reason, Name, #data{user=User, game=Game, timer=Timer, hero=Hero}) ->
 	Msg = <<CMD_QUIT>>,
 	connecter:call(Game, ?GAME_SERVICE_LOGIN, ?GAME_MSG_ID_QUIT, Msg),
 	% 取消计时器
-	timer:cancel(Timer),
-	chater:unregister(Hero#hero.char_name).
+	timer:cancel(Timer).
+	% chater:unregister(Hero#hero.char_name).
 
 code_change(_OldVsn, Name, Data, _Extra) ->
 	{ok, Name, Data}.
@@ -308,7 +308,7 @@ wait(think, #data{scene=Scene, hero=Hero, game=_Game}=Data) ->
 	{next_state, wait, Data};
 
 wait({recv, Game, <<?GAME_SERVICE_CHAT, ?CHANNEL_SCENE, _Vip, NameLen:16/integer, _Name:NameLen/binary, ContentLen:16/integer, Content:ContentLen/binary, _Other/binary>>}, #data{user=User, game=Game}=Data) ->
-	chater:response(User, binary_to_list(Content)),
+	% chater:response(User, binary_to_list(Content)),
 	{next_state, wait, Data};
 
 wait({recv, Game, <<ServiceId, CmdId, Bin/binary>>}, #data{user=User, game=Game}=Data) ->
@@ -374,12 +374,13 @@ not_ready_check(#data{user=User, dc=Dc}=Data) ->
 		true ->
 			CMD_LOGIN = 1,
 			ServerId = application:get_env(bot, serverid, 1),
+			FromId = "0",
 			Username = utils:utf(User++"&"),
 			Time = utils:seconds1970(),
 			Stime = utils:i2s(Time),
 			Key = application:get_env(bot, key, ?KEY),
-			Sign = utils:md5(ServerId++User++Stime++Key),
-			Password = utils:utf("_1serverid=" ++ ServerId ++ "&username=" ++ User ++ "&time=" ++ Stime ++ "&sign=" ++ Sign),
+			Sign = utils:md5(ServerId++FromId++User++Stime++Key),
+			Password = utils:utf("_1serverid=" ++ ServerId ++ "&fromid=" ++ FromId ++ "&username=" ++ User ++ "&time=" ++ Stime ++ "&sign=" ++ Sign),
 			Msg = <<CMD_LOGIN, Username/binary, Password/binary>>,
 			connecter:call(Dc, ?DC_SERVICE_LOGIN, ?DC_MSG_ID_LOGIN, Msg),
 			{next_state, not_entergame, Data};
@@ -398,7 +399,7 @@ just_enter_check(#data{user=User, hero=Hero}=Data) ->
 			self() ! think,
 			robot_master ! {success, User},
 			% 在聊天服务器里注册
-			chater:register(binary_to_list(Hero#hero.char_name), self()),
+			% chater:register(binary_to_list(Hero#hero.char_name), self()),
 			{next_state, wait, Data#data{timer=Timer}};
 		_ ->
 			{next_state, just_enter, Data}
