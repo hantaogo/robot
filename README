@@ -1,0 +1,5 @@
+开启聊天机器人
+bot.app 内设置 {chatbot, true}
+
+依赖的聊天机器人服务器
+https://github.com/hantaogo/chatrobot

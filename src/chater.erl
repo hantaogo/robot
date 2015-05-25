@@ -4,7 +4,7 @@
 -export([
 	start_link/2,
 	stop/0,
-	response/2,
+	response/3,
 	register/2,
 	unregister/1
 	]).
@@ -29,8 +29,8 @@ start_link(Host, Port) ->
 stop() ->
 	gen_server:cast(?MODULE, stop).
 
-response(Name, Content) ->
-	gen_server:cast(?MODULE, {response, Name, Content}).
+response(Name, SpeakerName, Content) ->
+	gen_server:cast(?MODULE, {response, Name, SpeakerName, Content}).
 
 register(Name, Pid) ->
 	gen_server:call(?MODULE, {register, Name, Pid}).
@@ -58,12 +58,12 @@ handle_call({unregister, Name}, _From, #state{chars=Chars}=State) ->
 handle_call(_Request, _From, State) ->
 	{reply, ok, State}.
 
-handle_cast({response, _Name, _Content}, #state{socket=undefined}=State) ->
+handle_cast({response, _Name, _SpeakerName, _Content}, #state{socket=undefined}=State) ->
 	{noreply, State};
 
-handle_cast({response, Name, Content}, #state{socket=Socket}=State) ->
-	Data = list_to_binary(Name++":"++Content),
-	% io:format("Name: ~p Content: ~p Data: ~p~n", [Name, Content, Data]),
+handle_cast({response, Name, SpeakerName, Content}, #state{socket=Socket}=State) ->
+	Msg = Name++":"++SpeakerName++":"++Content,
+	Data = unicode:characters_to_binary(Msg, utf8),
 	gen_tcp:send(Socket, <<Data/binary>>),
 	{noreply, State};
 
@@ -79,12 +79,12 @@ handle_cast(_Request, State) ->
 
 handle_info({tcp, _Socket, <<Data/binary>>}, #state{chars=Chars}=State) ->
 	% io:format("tcp: ~p~n", [Data]),
-	S = binary_to_list(Data),
+	S = unicode:characters_to_list(Data, utf8),
 	case catch string:tokens(S, ":") of
-		[Name, Content] ->
+		[Name, _SpeakerName, Content] ->
 			case dict:find(Name, Chars) of
 				{ok, Pid} ->
-					Pid ! {chat, list_to_binary(Content)};
+					Pid ! {chat, Content};
 				error ->
 					error
 			end;

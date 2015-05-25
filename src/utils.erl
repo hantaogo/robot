@@ -18,7 +18,7 @@ seconds1970() ->
 
 -spec utf(string()) -> binary().
 utf(Str) ->
-	Bin = unicode:characters_to_binary(Str),
+	Bin = unicode:characters_to_binary(Str, utf8),
 	Len = size(Bin),
 	<<Len:16/integer, Bin/binary>>.
 

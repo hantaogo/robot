@@ -149,8 +149,11 @@ terminate(Reason, Name, #data{user=User, game=Game, timer=Timer, hero=Hero}) ->
 	Msg = <<CMD_QUIT>>,
 	connecter:call(Game, ?GAME_SERVICE_LOGIN, ?GAME_MSG_ID_QUIT, Msg),
 	% 取消计时器
-	timer:cancel(Timer).
-	% chater:unregister(Hero#hero.char_name).
+	timer:cancel(Timer),
+	case application:get_env(bot, chatbot, false) of
+		true ->
+			chater:unregister(Hero#hero.char_name)
+	end.
 
 code_change(_OldVsn, Name, Data, _Extra) ->
 	{ok, Name, Data}.
@@ -307,8 +310,11 @@ wait(think, #data{scene=Scene, hero=Hero, game=_Game}=Data) ->
 	% say(Game, Hero#hero.char_name, make_word()),
 	{next_state, wait, Data};
 
-wait({recv, Game, <<?GAME_SERVICE_CHAT, ?CHANNEL_SCENE, _Vip, NameLen:16/integer, _Name:NameLen/binary, ContentLen:16/integer, Content:ContentLen/binary, _Other/binary>>}, #data{user=User, game=Game}=Data) ->
-	% chater:response(User, binary_to_list(Content)),
+wait({recv, Game, <<?GAME_SERVICE_CHAT, ?CHANNEL_SCENE, _Vip, NameLen:16/integer, Name:NameLen/binary, ContentLen:16/integer, Content:ContentLen/binary, _Other/binary>>}, #data{hero=Hero, game=Game}=Data) ->
+	case application:get_env(bot, chatbot, false) of
+		true ->
+			chater:response(Hero#hero.char_name, unicode:characters_to_list(Name, utf8), unicode:characters_to_list(Content, utf8))
+	end,
 	{next_state, wait, Data};
 
 wait({recv, Game, <<ServiceId, CmdId, Bin/binary>>}, #data{user=User, game=Game}=Data) ->
@@ -323,7 +329,7 @@ wait({recv, Game, <<ServiceId, CmdId, Bin/binary>>}, #data{user=User, game=Game}
 	{next_state, wait, Data};
 
 wait({chat, Content}, #data{hero=Hero, game=Game}=Data) ->
-	% io:format("chat: ~p~n", [Content]),
+	% io:format("chat: ~ts ~ts~n", [Hero#hero.char_name, Content]),
 	say(Game, Hero#hero.char_name, Content),
 	{next_state, wait, Data};
 
@@ -392,14 +398,17 @@ not_ready_check(#data{user=User, dc=Dc}=Data) ->
 just_enter_check(#data{user=User, hero=Hero}=Data) ->
 	case Data#data.hero /= undefined andalso Data#data.scene /= undefined of
 		true ->
-			io:format("~ts join~n", [unicode:characters_to_list(Hero#hero.char_name, utf8)]),
+			io:format("~ts join~n", [Hero#hero.char_name]),
 			TimeThink = application:get_env(bot, time_think, ?TIME_THINK),
 			{ok, Timer} = timer:send_interval(TimeThink, self(), think),
 			% 立即触发一次思考
 			self() ! think,
 			robot_master ! {success, User},
 			% 在聊天服务器里注册
-			% chater:register(binary_to_list(Hero#hero.char_name), self()),
+			case application:get_env(bot, chatbot, false) of
+				true ->
+					chater:register(Hero#hero.char_name, self())
+			end,
 			{next_state, wait, Data#data{timer=Timer}};
 		_ ->
 			{next_state, just_enter, Data}
@@ -407,7 +416,7 @@ just_enter_check(#data{user=User, hero=Hero}=Data) ->
 
 -spec bin_to_hero(binary()) -> {ok, term()} | {error, term()}.
 bin_to_hero(<<Type, ShowId:32/integer, CampId, HeadId, ConfLen:16/integer, ConfName:ConfLen/binary, OfficalId:16/integer, IsGodArmy, Level:16/integer, Heading, MoveSpeed:16/integer, X:16/integer, Y:16/integer, CharNameLen:16/integer, CharName:CharNameLen/binary, ParameterId:32/integer, AttackMode, _/binary>>) ->
-	{ok, #hero{type=Type, show_id=ShowId, camp_id=CampId, head_id=HeadId, confraternity=ConfName, offical_id=OfficalId, is_god_army=IsGodArmy, level=Level, heading=Heading, move_speed=MoveSpeed, x=X, y=Y, char_name=CharName, parameter_id=ParameterId, attack_mode=AttackMode}};
+	{ok, #hero{type=Type, show_id=ShowId, camp_id=CampId, head_id=HeadId, confraternity=ConfName, offical_id=OfficalId, is_god_army=IsGodArmy, level=Level, heading=Heading, move_speed=MoveSpeed, x=X, y=Y, char_name=unicode:characters_to_list(CharName, utf8), parameter_id=ParameterId, attack_mode=AttackMode}};
 bin_to_hero(Bin) ->
 	{error, {invalid_data, Bin}}.
 
